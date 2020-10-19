@@ -7,7 +7,7 @@ Place in location accessible to run by telegraf, eg. /usr/local/bin.
 eg.
 
 ```
-go build -o telegraf_dircount cmd/main.go`
+go build -o telegraf_dircount cmd/main.go
 mv telegraf_dircount /usr/local/bin/
 ```
 
