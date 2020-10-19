@@ -2,10 +2,15 @@
 
 ### Building
 `go build -o {desired binary name} cmd/main.go`
-eg.
-`go build -o telegraf_dircount =cmd/main.go`
 
 Place in location accessible to run by telegraf, eg. /usr/local/bin.
+eg.
+
+```
+go build -o telegraf_dircount cmd/main.go`
+mv telegraf_dircount /usr/local/bin/
+```
+
 
 
 ### Using
