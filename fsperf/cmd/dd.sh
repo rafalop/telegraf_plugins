@@ -19,7 +19,7 @@ if [ ! -d "$dd_perfdir" ];then echo "Perf dir $dd_perfdir doesn't exist, exiting
 #dd_results_file=$4
 dd_bs=64k
 dd_count=$(($size_outfile_mb*1024/64))
-dd_results_file=/tmp/__dd_raw_results
+dd_results_file=$(mktemp)
 dd_outfile=${dd_perfdir}/__dd_test_outfile
 kill_timeout=$(($timeout+1))
 
@@ -59,3 +59,6 @@ else
 fi
 
 jq -n --arg bs "$dd_bs" --arg count "$dd_count" --arg wtm "$time_write" --arg wbts "$bytes" --arg wrt "$rate" --arg wto "$write_timeout" --arg rtm "$time_read" --arg rbts "$bytes_read" --arg rrt "$rate_read" --arg rto "$read_timeout" '{dd: {bs: $bs, count: $count, write_time: $wtm, write_bytes: $wbts, write_rate: $wrt, write_timeout: $wto, read_time: $rtm, read_bytes: $rbts, read_rate: $rrt, read_timeout: $rto} }' 
+
+rm -f $dd_results_file
+rm -f ${dd_results_file}_read
