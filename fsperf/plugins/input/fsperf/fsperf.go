@@ -8,9 +8,8 @@ import(
     "github.com/influxdata/telegraf"
     "github.com/influxdata/telegraf/plugins/inputs"
     "strconv"
-    //"time"
+    "time"
     "encoding/json"
-    //"sync"
 )
 
 type fsperf struct{
@@ -19,6 +18,7 @@ type fsperf struct{
   Timeout string `toml:"timeout"`
   FileSize string `toml:"filesize"`
   RandIoTime string `toml:"randio_time"`
+  RunInterval int `toml:"run_interval"`
 }
 
 func init() {
@@ -29,6 +29,7 @@ func init() {
       FileSize: "500",
       DDscript: "/usr/local/bin/dd.sh",
       RandIoTime: "5",
+      RunInterval: 10,
     }
   })
 }
@@ -52,11 +53,14 @@ func (d *fsperf) SampleConfig() string {
   # ddscript = /usr/local/bin/dd.sh
   # Time to spend doing randomio
   # randio_time = 5
+  # Interval between runs in minutes
+  # run_interval = 10
 `
 }
 
 func (d *fsperf) Gather(a telegraf.Accumulator) error {
   d.sendMetric(a)
+  time.Sleep(time.Duration(d.RunInterval)*time.Minute)
   return nil
 }
 
@@ -66,6 +70,10 @@ type ResultsData struct {
   read uint64
   rand_iops_cache uint64
   rand_iops_nocache uint64
+  rand_nocache_maxlat uint64
+  rand_nocache_avglat uint64
+  rand_cache_avglat uint64
+  rand_cache_maxlat uint64
 }
 
 func (d *fsperf) getBW(path string, results *ResultsData) {
@@ -108,6 +116,8 @@ func (d *fsperf) getSmallIO(path string, results *ResultsData) {
   }
   ioping_results := strings.Split(string(out), " ") 
   results.rand_iops_nocache, _ = strconv.ParseUint(ioping_results[2], 10, 64)
+  results.rand_nocache_avglat, _ = strconv.ParseUint(ioping_results[5], 10, 64)
+  results.rand_nocache_maxlat, _ = strconv.ParseUint(ioping_results[6], 10, 64)
 
   // Run ioping with cache
   cmd = exec.Command(ioping_bin, `-C`, `-G`, `-i0`, `-B`, `-s4k`, `-w`+d.RandIoTime, path)
@@ -117,6 +127,8 @@ func (d *fsperf) getSmallIO(path string, results *ResultsData) {
   }
   ioping_results = strings.Split(string(out), " ") 
   results.rand_iops_cache, _ = strconv.ParseUint(ioping_results[2], 10, 64)
+  results.rand_cache_avglat, _ = strconv.ParseUint(ioping_results[5], 10, 64)
+  results.rand_cache_maxlat, _ = strconv.ParseUint(ioping_results[6], 10, 64)
   return
 }
 
@@ -125,11 +137,14 @@ func (d *fsperf) fetchResults(dir string, results_chan chan map[string]interface
   d.getBW(dir, results)
   d.getSmallIO(dir, results)
   results_chan <- map[string]interface{}{
-    "dir": dir,
     "write": results.write,
     "read": results.read,
     "rand_cache": results.rand_iops_cache,
     "rand_nocache": results.rand_iops_nocache,
+    "rand_nocache_maxlat": results.rand_nocache_maxlat,
+    "rand_nocache_avglat": results.rand_nocache_avglat,
+    "rand_cache_maxlat": results.rand_cache_maxlat,
+    "rand_cache_avglat": results.rand_cache_avglat,
   }
   return
 }
@@ -139,7 +154,7 @@ func (d *fsperf) sendMetric(a telegraf.Accumulator) {
   for _, dir := range d.Directories {
     go d.fetchResults(dir, results_chan)
   }
-  for range d.Directories {
-    a.AddFields("fsperf", <-results_chan, nil)
+  for _,dir := range d.Directories {
+    a.AddFields("fsperf", <-results_chan, map[string]string{"dir": dir})
   }
 }
