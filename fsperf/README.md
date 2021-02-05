@@ -17,6 +17,9 @@ mv telegraf_dircount /usr/local/bin/
 ### Using
 Configure a plugin.conf file with the desired directory to perf test
 
+Make sure `ioping` and `dd` are installed.
+
+
 eg. `/etc/telegraf_fsperf.conf`
 ```
 [[inputs.fsperf]]
