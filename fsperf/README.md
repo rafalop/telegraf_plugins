@@ -1,5 +1,5 @@
 ## Simple filesystem perf test plugin
-This simple plugin uses `dd` and `ioping` to do a simple performance test on a (filesystem) directory.
+This plugin uses `dd` and `ioping` to do a simple performance test on a (filesystem) directory.
 
 
 ### Building
