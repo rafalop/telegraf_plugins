@@ -19,6 +19,7 @@ type fsperf struct{
   FileSize string `toml:"filesize"`
   RandIoTime string `toml:"randio_time"`
   RunInterval int `toml:"run_interval"`
+  MaxSimultaneous int `toml:"max_simultaneous"`
 }
 
 func init() {
@@ -30,6 +31,7 @@ func init() {
       DDscript: "/usr/local/bin/dd.sh",
       RandIoTime: "5",
       RunInterval: 10,
+      MaxSimultaneous: 3,
     }
   })
 }
@@ -55,11 +57,15 @@ func (d *fsperf) SampleConfig() string {
   # randio_time = 5
   # Interval between runs in minutes
   # run_interval = 10
+  # Maximum simultaenous dirs to test
+  # max_simultaneous = 3
 `
 }
 
 func (d *fsperf) Gather(a telegraf.Accumulator) error {
+  //log.Println("metrics gather, interval:", d.RunInterval, "simultaneous:", d.MaxSimultaneous)
   d.sendMetric(a)
+  //log.Println("sent metrics, sleeping",d.RunInterval)
   time.Sleep(time.Duration(d.RunInterval)*time.Minute)
   return nil
 }
@@ -132,11 +138,11 @@ func (d *fsperf) getSmallIO(path string, results *ResultsData) {
   return
 }
 
-func (d *fsperf) fetchResults(dir string, results_chan chan map[string]interface{}) {
+func (d *fsperf) fetchResults(dir string) (map[string]interface{}) {
   var results = new(ResultsData)
   d.getBW(dir, results)
   d.getSmallIO(dir, results)
-  results_chan <- map[string]interface{}{
+  return map[string]interface{}{
     "write": results.write,
     "read": results.read,
     "rand_cache": results.rand_iops_cache,
@@ -146,15 +152,41 @@ func (d *fsperf) fetchResults(dir string, results_chan chan map[string]interface
     "rand_cache_maxlat": results.rand_cache_maxlat,
     "rand_cache_avglat": results.rand_cache_avglat,
   }
-  return
 }
 
 func (d *fsperf) sendMetric(a telegraf.Accumulator) {
   var results_chan = make(chan map[string]interface{})
+  var jobs_chan = make(chan string, len(d.Directories))
+  var workers int
+
+  if len(d.Directories) <= d.MaxSimultaneous {
+    workers = len(d.Directories)
+  } else {
+    workers = d.MaxSimultaneous
+  }
+  // Spawn workers
+  for i := 0; i < workers ; i++ {
+    //log.Println("starting worker", i+1)
+    go d.Worker(jobs_chan, results_chan)
+  }
+  // Add jobs
   for _, dir := range d.Directories {
-    go d.fetchResults(dir, results_chan)
+    jobs_chan <- dir
   }
+  close(jobs_chan)
+
+  // Process results
   for _,dir := range d.Directories {
-    a.AddFields("fsperf", <-results_chan, map[string]string{"dir": dir})
+    dir_a := strings.Split(dir, "/")
+    a.AddFields("fsperf", <-results_chan, map[string]string{"dir": dir, "short_name":dir_a[len(dir_a)-1]})
+    //log.Println("done", dir)
   }
+
+}
+
+func (d *fsperf) Worker(jobs_chan <-chan string, results_chan chan map[string]interface{}) {
+    for dir := range jobs_chan {
+      //log.Println("perfing", dir)
+      results_chan <-d.fetchResults(dir)
+    }
 }
