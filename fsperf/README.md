@@ -1,4 +1,6 @@
 ## Simple filesystem perf test plugin
+This simple plugin uses `dd` and `ioping` to do a simple performance test on a (filesystem) directory.
+
 
 ### Building
 `go build -o {desired binary name} cmd/main.go`
